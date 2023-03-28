@@ -109,7 +109,7 @@ int clip_ss(Display* d, int s, Window root, XWindowAttributes* root_attr, XImage
 		&attrs
 	);
 
-	XSelectInput(d, w, ExposureMask | KeyPressMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask);
+	XSelectInput(d, w, ExposureMask | KeyPressMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask | FocusChangeMask);
 	XMapWindow(d, w);
 
 	gc_vals.function = GXcopy; 
@@ -117,8 +117,6 @@ int clip_ss(Display* d, int s, Window root, XWindowAttributes* root_attr, XImage
 	gc_vals.background = BlackPixel(d, s); 
 	gc_vals.foreground = WhitePixel(d, s); 
 	GC graphics = XCreateGC(d, w, GCFunction | GCPlaneMask | GCForeground | GCBackground, &gc_vals);
-
-	XGrabKeyboard(d, w, 0, GrabModeAsync, GrabModeAsync, CurrentTime);
 
 	Cursor c = XcursorLibraryLoadCursor(d, "tcross");
 	XDefineCursor(d, w, c);
@@ -133,15 +131,19 @@ int clip_ss(Display* d, int s, Window root, XWindowAttributes* root_attr, XImage
 	XEvent e;
 	while (true) {
 		XNextEvent(d, &e);
-		if (e.type == Expose) { // redraw the whole screen
+		if (e.type == FocusOut) {
+			XGrabKeyboard(d, w, 0, GrabModeAsync, GrabModeAsync, CurrentTime);
+		} else if (e.type == KeyPress) { // close on key press
+			XDestroyWindow(d, w);
+			return 1;
+		} else if (e.type == Expose) { // redraw the whole screen
 			XPutImage(d, w, graphics, full_ss, 0, 0, 0, 0, root_attr->width, root_attr->height);
 			if (button_down) {
 				Rect r;
 				calc_rect(&r, start_x, start_y, current_x, current_y);
 				XDrawRectangle(d, w, graphics, r.left, r.top, r.width, r.height);
 			}
-		}
-		else if (e.type == MotionNotify && button_down == true) { // when the selection started, redraw the rectangle
+		} else if (e.type == MotionNotify && button_down == true) { // when the selection started, redraw the rectangle
 			XMotionEvent* ev = (XMotionEvent*)(&e);
 			int old_x = current_x;
 			int old_y = current_y;
@@ -202,6 +204,11 @@ int clip_ss(Display* d, int s, Window root, XWindowAttributes* root_attr, XImage
 			old_rect = r;
 		} else if (e.type == ButtonPress) { // start selection on button press
 			XButtonEvent* ev = (XButtonEvent*)(&e);
+			// upon pressing not the left click, stop screen shotting
+			if (ev->button != 1) {
+				return 1;
+			}
+
 			start_x = ev->x;
 			start_y = ev->y;
 			if (start_x <= 0) {
@@ -223,10 +230,7 @@ int clip_ss(Display* d, int s, Window root, XWindowAttributes* root_attr, XImage
 
 				return write_png(stdout, full_ss, &old_rect);
 			}
-		} else if (e.type == KeyPress) { // close on key press
-			XDestroyWindow(d, w);
-			return 0;
-		}
+		} 
 	}
 
 	return 0;
