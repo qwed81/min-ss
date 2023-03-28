@@ -1,4 +1,4 @@
-min-ss takes a selection and outputs it to stdout alternatively --full can be added as an argument to skip selection process
+min-ss takes a selection and outputs it to stdout, alternatively --full can be added as an argument to skip selection process
 
 examples:
 min-ss --full | xclip -i -sel clip -t image/png
